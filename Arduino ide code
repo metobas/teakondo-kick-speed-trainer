@@ -1,0 +1,285 @@
+//////////////////////////////////////////////////////////
+//INCLUDES ///////////////////////////////////////////////
+//////////////////////////////////////////////////////////
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+//////////////////////////////////////////////////////////
+//SETTING OLED ///////////////////////////////////////////
+//////////////////////////////////////////////////////////
+#define SCREEN_WIDTH 128
+#define SCREEN_HIGHT 64
+#define OLED_RESET   -1
+#define I2C_ADDRESS  0x3C
+
+Adafruit_SSD1306 Oled(SCREEN_WIDTH, SCREEN_HIGHT, &Wire, OLED_RESET);
+
+//////////////////////////////////////////////////////////
+//PINS ///////////////////////////////////////////////////
+//////////////////////////////////////////////////////////
+
+#define inc_Button      2
+#define dec_Button      3
+#define start_Button    4
+#define buzzer          5
+#define kick_Sensor     6
+
+//////////////////////////////////////////////////////////
+//VARIABLES //////////////////////////////////////////////
+//////////////////////////////////////////////////////////
+
+int microphone_AnalogInput_Reading = 0;
+
+int8_t active_Kick_Counter = 0;
+
+// mode 1 = one kick speed calculation
+// mode 2 = two kick speed calculation
+// mode 3 = between two kicks speed calculation
+int8_t kicking_Mode = 1;
+
+unsigned long int kickSpeed_StartCounter = 0;
+unsigned long int fIrst_Kick_Instance    = 0;
+unsigned long int second_Kick_Instance   = 0;
+
+// 0 = idle mode, 1 = run mode
+bool program_Mode = 0;
+
+// a flag to make sure the setup is done only once
+bool beginning_Of_The_Game_Setup_Flag = 0;
+
+//button debounce variable
+int dec_Button_Debounce_Start_Time   = 0;
+int inc_Button_Debounce_Start_Time   = 0;
+int start_Button_Debounce_Start_Time = 0;
+
+unsigned long int mode1_Hit_Debounce     = 0;
+unsigned long int mode2_Hit_Debounce     = 0;
+unsigned long int mode3_Hit_Debounce     = 0;
+
+bool last_Button_State    = 1;
+
+
+//////////////////////////////////
+//setup
+void setup() {
+
+  //initiating serial monitor baud rate
+  Serial.begin(19200);
+
+  //setting pin 2, 3, 4 and 6 to inputs
+  DDRD  &= 0b10100011;
+  //activating pullup resistor for pin 2, 3, 4 and 6
+  PORTD |= 0b01011100;
+  // setting pin 5 to output
+  DDRD  |= 0b00100000;
+  
+  //initialize OLED
+  if(!Oled.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS)) {
+    while(1);
+  }
+
+  Oled.clearDisplay();
+  Oled.display();
+  Oled.setCursor(0, 0);
+  Oled.setTextColor(WHITE);
+  Oled.setTextSize( 2 );
+  Oled.print("chose mode");
+  Oled.setCursor( 5, 32 );
+  Oled.setTextSize( 4 );
+  Oled.print( kicking_Mode );
+  Oled.display();
+}// end setup
+
+void loop() {
+  
+  if ( !program_Mode ){
+    
+    // check if the decrementation button is clicked
+    if ( ( kicking_Mode > 1 ) && !( PIND & ( 1 << PIND2 ) ) && ( millis() - dec_Button_Debounce_Start_Time > 200 ) ){
+      Oled.clearDisplay();
+      kicking_Mode--;
+      Oled.setCursor(0, 0);
+      Oled.setTextSize( 2 );
+      Oled.print("chose mode");
+      Oled.setCursor( 5, 32 );
+      Oled.setTextSize( 4 );
+      Oled.print( kicking_Mode );
+      Oled.display();
+      dec_Button_Debounce_Start_Time = millis();
+    }//end if
+
+    // check if the incrementation button is clicked
+    if ( ( kicking_Mode < 3 ) && !( PIND & ( 1 << PIND3 ) ) && ( millis() - inc_Button_Debounce_Start_Time > 200 ) ){
+      Oled.clearDisplay();
+      kicking_Mode++;
+      Oled.setCursor(0, 0);
+      Oled.setTextSize( 2 );
+      Oled.print("chose mode");
+      Oled.setCursor( 5, 32 );
+      Oled.setTextSize( 4 );
+      Oled.print( kicking_Mode );
+      Oled.display();
+      inc_Button_Debounce_Start_Time = millis();
+    }//end if
+
+    //check if the start button is clicked
+    if ( !( PIND & ( 1 << PIND4 ) ) && ( millis() - start_Button_Debounce_Start_Time > 200 ) ){
+      Oled.clearDisplay();
+      Oled.setCursor(5, 25);
+      Oled.setTextSize(4);
+      Oled.print("READY");
+      Oled.display();
+      program_Mode = 1;
+      start_Button_Debounce_Start_Time = millis();
+    }//end if
+  
+  }//end if
+
+  // start the kick speed calculation
+  if ( program_Mode ){
+
+    // executing the setup commads once
+    if ( !beginning_Of_The_Game_Setup_Flag ){
+      delay(3000);
+      Oled.clearDisplay();
+      Oled.setCursor(5, 25);
+      Oled.setTextSize(4);
+      Oled.print("START");
+      Oled.display();
+      tone(buzzer, 500);
+      kickSpeed_StartCounter = micros();
+      delay(250);
+      noTone(buzzer);
+      beginning_Of_The_Game_Setup_Flag = 1;
+    }//end setup if
+
+    // execute kicking_Mode 1 calculations after the setup is done
+    if ( kicking_Mode == 1 && beginning_Of_The_Game_Setup_Flag == 1 ){
+      
+      // check if the player hit the hitting pad
+      if( !( PIND & ( 1 << PIND6 ) ) && millis() - mode1_Hit_Debounce > 75){
+        float player_Speed = ( micros() - kickSpeed_StartCounter ) / 1000000.0;
+        mode1_Hit_Debounce = millis();
+        Oled.clearDisplay();
+        Oled.setCursor(2, 2);
+        Oled.setTextSize(2);
+        Oled.print("1 hit pace");
+        Oled.drawLine(0, 20, 127, 20, WHITE);
+        Oled.setCursor(1, 25);
+        Oled.setTextSize(3);
+        Oled.println(player_Speed, 4);
+        Oled.setTextSize(2);
+        Oled.print(" sec");
+        Oled.display();
+        beginning_Of_The_Game_Setup_Flag = 0;  // reset the setting up flag to let the game resetup befor starting
+        delay(10000);
+        Oled.clearDisplay();
+        Oled.setCursor(0, 0);
+        Oled.setTextSize( 2 );
+        Oled.print("chose mode");
+        Oled.setCursor( 5, 32 );
+        Oled.setTextSize( 4 );
+        Oled.print( kicking_Mode );
+        Oled.display();
+        program_Mode = 0;
+      }//end if
+    }//end mode 1 if
+
+    // execute kicking_Mode 2 calculations after the setup is done 
+    if ( kicking_Mode == 2 && beginning_Of_The_Game_Setup_Flag == 1 ){
+      
+      if( last_Button_State  && !( PIND & ( 1 << PIND6 ) ) && millis() - mode2_Hit_Debounce > 250 ){
+        active_Kick_Counter++;
+        
+        // first kick
+        if (active_Kick_Counter == 1){
+          fIrst_Kick_Instance = micros();
+        }
+
+        // second kick
+        if ( active_Kick_Counter == 2 ){
+          second_Kick_Instance = micros();
+                    
+          Oled.clearDisplay();
+          Oled.setCursor( 0, 0 );
+          Oled.setTextSize(1);
+          Oled.println("kick 1 time:");
+          Oled.setTextSize(2);
+          Oled.print( (fIrst_Kick_Instance - kickSpeed_StartCounter ) / 1000000.0, 4 );
+          Oled.setTextSize( 1 );
+          Oled.print( " sec" );
+          Oled.drawLine(0, 32, 127, 32, WHITE);
+          Oled.setCursor( 0, 40 );
+          Oled.setTextSize(1);
+          Oled.println("kick 2 time:");
+          Oled.setTextSize(2);
+          Oled.print( (second_Kick_Instance - kickSpeed_StartCounter ) / 1000000.0, 4 );
+          Oled.setTextSize( 1 );
+          Oled.print( " sec" );
+          Oled.display();
+          beginning_Of_The_Game_Setup_Flag = 0;  // reset the setting up flag to let the game resetup befor starting
+          delay( 10000 );
+          Oled.clearDisplay();
+          Oled.setCursor( 0, 0 );
+          Oled.setTextSize( 2 );
+          Oled.print( "chose mode" );
+          Oled.setCursor( 5, 32 );
+          Oled.setTextSize( 4 );
+          Oled.print( kicking_Mode );
+          Oled.display();
+          active_Kick_Counter = 0;
+          program_Mode = 0;
+        }// end if
+        mode2_Hit_Debounce = millis();
+      }// end if
+      last_Button_State = ( PIND & ( 1 << PIND6 ) );
+    }// end mode 2 if statement
+    
+
+    // execute kicking_Mode 3 calculations after the setup is done 
+    if ( kicking_Mode == 3 && beginning_Of_The_Game_Setup_Flag == 1 ){
+      
+      if( last_Button_State  && !( PIND & ( 1 << PIND6 ) ) && millis() - mode3_Hit_Debounce > 250 ){
+        active_Kick_Counter++;
+        
+        // first kick
+        if (active_Kick_Counter == 1){
+          fIrst_Kick_Instance = micros();
+        }
+
+        // second kick
+        if ( active_Kick_Counter == 2 ){
+          second_Kick_Instance = micros();
+          float player_Speed = ( second_Kick_Instance - fIrst_Kick_Instance ) / 1000000.0;
+          
+          Oled.clearDisplay();
+          Oled.setCursor( 2, 2 );
+          Oled.setTextSize(2);
+          Oled.print( "between1&2" );
+          Oled.drawLine( 0, 20, 127, 20, WHITE );
+          Oled.setCursor( 1, 25 );
+          Oled.setTextSize( 3 );
+          Oled.println( player_Speed, 4 );
+          Oled.setTextSize( 2 );
+          Oled.print( " sec" );
+          Oled.display();
+          beginning_Of_The_Game_Setup_Flag = 0;  // reset the setting up flag to let the game resetup befor starting
+          delay( 10000 );
+          Oled.clearDisplay();
+          Oled.setCursor( 0, 0 );
+          Oled.setTextSize( 2 );
+          Oled.print( "chose mode" );
+          Oled.setCursor( 5, 32 );
+          Oled.setTextSize( 4 );
+          Oled.print( kicking_Mode );
+          Oled.display();
+          active_Kick_Counter = 0;
+          program_Mode = 0;
+        }// end if
+        mode3_Hit_Debounce = millis();
+      }// end if
+      last_Button_State = ( PIND & ( 1 << PIND6 ) );
+    }// end mode 3 if statement
+
+  }//end if
+}//end main loop
