@@ -53,24 +53,25 @@ An Arduino-based system for measuring your students’ kick reaction times and s
    ```bash
    git clone https://github.com/yourusername/taekwondo-kick-speed-trainer.git
    cd taekwondo-kick-speed-trainer
-Install libraries
+
+2. **Install libraries**
 In Arduino IDE Library Manager:
 
 Adafruit SSD1306
 
 Adafruit GFX
 
-Open the sketch
+3. **Open the sketch**
 
 Load KickSpeedTrainer.ino in the IDE.
 
 Select your board & port.
 
-Upload
+4 **Upload**
 
 Click Upload and wait for completion.
 
-Usage
+## Usage
 Power on the board. The OLED shows Press START.
 
 Select mode (use Mode − / +):
@@ -91,7 +92,7 @@ The foil contact closes, triggering an interrupt that records micros().
 
 Read results on the screen. After 5 s it resets to the mode-select prompt.
 
-How It Works
+## How It Works
 Interrupt-driven timing:
 
 Sensor pin configured as INPUT_PULLUP + attachInterrupt(..., FALLING).
@@ -106,19 +107,19 @@ State machine:
 
 Phases: WAIT_FOR_START → COUNTDOWN → AWAIT_KICKS → DISPLAY_RESULT.
 
-Calibration & Tuning
-Debounce interval (debounceUS): adjust 2 ms–10 ms to eliminate contact chatter.
+## Calibration & Tuning
+Debounce interval (debounceUS): adjust between 2 ms–10 ms to eliminate contact chatter.
 
 Timeouts: add a maximum wait if no kick is detected to avoid hanging.
 
-Troubleshooting
+## Troubleshooting
 No trigger: check foil wiring, ensure both strips make firm contact.
 
 Multiple triggers: increase debounceUS or add a small RC filter (e.g., 100 nF + 10 kΩ).
 
 OLED blank: confirm wiring & I²C address (0x3C).
 
-Future Improvements
+## Future Improvements
 Log times over Wi-Fi to a dashboard
 
 Mobile-app interface for session control and result storage
